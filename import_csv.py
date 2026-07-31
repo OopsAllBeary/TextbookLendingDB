@@ -21,6 +21,30 @@ COLUMN_MAP = {
     "Date Submitted": "submitted_date"
 }
 
+DATABASE_COLUMNS = [
+    "application_id",
+    "student_id",
+    "first_name",
+    "last_name",
+    "semester",
+    "campus",
+    "program",
+    "requested_device",
+    "requested_books_devices",
+    "course_names",
+    "submitted_date",
+    "current_data",
+    "last_seen_import"
+]
+
+def clean_csv_row(row):
+    clean_row = {}
+
+    for csv_name, db_name in COLUMN_MAP.items():
+        clean_row[db_name] = str(row.get(csv_name, "")).strip()
+
+    return clean_row
+
 def safe_string(value):
     if value is None:
         return ""
@@ -34,6 +58,36 @@ def make_application_id(clean_row):
     ])
 
     return hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+def build_upsert_query():
+    insert_columns = ", ".join(DATABASE_COLUMNS)
+
+    placeholders = ", ".join(
+        ["?"] * len(DATABASE_COLUMNS)
+    )
+
+    update_columns = [
+        col for col in DATABASE_COLUMNS
+        if col != "application_id"
+    ]
+
+    updates = ", ".join(
+        [
+            f"{col} = excluded.{col}"
+            for col in update_columns
+        ]
+    )
+
+    return f"""
+    INSERT INTO applications (
+        {insert_columns}
+    )
+    VALUES ({placeholders})
+
+    ON CONFLICT(application_id)
+    DO UPDATE SET
+        {updates}
+    """
 
 def import_csv(filename):
     df = pd.read_csv(filename, dtype=str).fillna("")
@@ -56,49 +110,16 @@ def import_csv(filename):
 
     import_id = cursor.lastrowid
 
+    query = build_upsert_query()
+
 
     for _, row in df.iterrows():
 
-        clean_row = {}
-
-        for csv_name, db_name in COLUMN_MAP.items():
-            clean_row[db_name] = row[csv_name]
+        clean_row = clean_csv_row(row)
 
         application_id = make_application_id(clean_row)
 
-        cursor.execute("""
-        INSERT INTO applications (
-            application_id,
-            student_id,
-            first_name,
-            last_name,
-            semester,
-            campus,
-            program,
-            requested_device,
-            requested_books_devices,
-            course_names,
-            submitted_date,
-            current_data,
-            last_seen_import
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        
-        ON CONFLICT(application_id)
-        DO UPDATE SET
-            student_id = excluded.student_id,
-            first_name = excluded.first_name,
-            last_name = excluded.last_name,
-            semester = excluded.semester,
-            campus = excluded.campus,
-            program = excluded.program,
-            requested_device = excluded.requested_device,
-            requested_books_devices = excluded.requested_books_devices,
-            course_names = excluded.course_names,
-            submitted_date = excluded.submitted_date,
-            current_data = excluded.current_data,
-            last_seen_import = excluded.last_seen_import
-        """, (
+        values = [
             application_id,
             clean_row["student_id"],
             clean_row["first_name"],
@@ -112,7 +133,9 @@ def import_csv(filename):
             clean_row["submitted_date"],
             json.dumps(clean_row),
             import_id
-        ))
+        ]
+
+        cursor.execute(query, values)
 
     conn.commit()
     conn.close()
