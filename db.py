@@ -27,8 +27,25 @@ def init_database():
     CREATE TABLE IF NOT EXISTS applications (
         application_id TEXT PRIMARY KEY,
         student_id TEXT NOT NULL,
+
+        first_name TEXT,
+        last_name TEXT,
+
+        semester TEXT,
+        campus TEXT,
+        program TEXT,
+
+        requested_device TEXT,
+        requested_books_devices TEXT,
+
+        course_names TEXT,
+
+        submitted_date TEXT,
+
         current_data TEXT NOT NULL,
+
         last_seen_import INTEGER,
+
         FOREIGN KEY(last_seen_import) REFERENCES imports(id)
     )
     """)
