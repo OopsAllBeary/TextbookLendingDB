@@ -31,6 +31,8 @@ def init_database():
         first_name TEXT,
         last_name TEXT,
 
+        pop_type TEXT,
+
         semester TEXT,
         campus TEXT,
         program TEXT,
@@ -53,12 +55,17 @@ def init_database():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS annotations (
         application_id TEXT PRIMARY KEY,
-        notes TEXT,
+
         status TEXT DEFAULT 'New',
+        notes TEXT,
+
         rsvp TEXT,
-        created_at TEXT,
-        last_updated TEXT,
-        FOREIGN KEY(application_id) REFERENCES applications(application_id)
+
+        created_date TEXT,
+        updated_date TEXT,
+
+        FOREIGN KEY(application_id)
+            REFERENCES applications(application_id)
     )
     """)
 
