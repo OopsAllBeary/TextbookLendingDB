@@ -31,6 +31,8 @@ def init_database():
         first_name TEXT,
         last_name TEXT,
 
+        email TEXT,
+
         pop_type TEXT,
 
         semester TEXT,

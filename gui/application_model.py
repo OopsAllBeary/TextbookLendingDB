@@ -20,6 +20,19 @@ class ApplicationTableModel(QAbstractTableModel):
         self._rows = []
         self.reload()
 
+    def update_annotation(self, application_id, status, notes, rsvp):
+        for index, row in enumerate(self._rows):
+            if row["application_id"] == application_id:
+                row["status"] = status
+                row["notes"] = notes
+                row["rsvp"] = rsvp
+
+                self.dataChanged.emit(
+                    self.index(index, 0),
+                    self.index(index, len(self.COLUMNS)-1)
+                )
+
+                break
 
     def reload(self):
         self.beginResetModel()

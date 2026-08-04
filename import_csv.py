@@ -11,6 +11,7 @@ import hashlib
 COLUMN_MAP = {
     "First Name": "first_name",
     "Last Name": "last_name",
+    "Email": "email",
     "Student ID": "student_id",
     "Student Population Type": "pop_type",
     "Semester Applied For": "semester",
@@ -27,6 +28,7 @@ DATABASE_COLUMNS = [
     "student_id",
     "first_name",
     "last_name",
+    "email",
     "pop_type",
     "semester",
     "campus",
@@ -91,7 +93,12 @@ def build_upsert_query():
         {updates}
     """
 
-def import_csv(filename):
+def import_applications(filename):
+    stats = {
+        "processed": 0,
+        "new": 0,
+        "updated": 0
+    }
     df = pd.read_csv(filename, dtype=str).fillna("")
 
     print(f"Loaded Row Count: {len(df)}")
@@ -117,15 +124,26 @@ def import_csv(filename):
 
     for _, row in df.iterrows():
 
+        stats["processed"] += 1
+
         clean_row = clean_csv_row(row)
 
         application_id = make_application_id(clean_row)
+
+        cursor.execute("""
+            SELECT 1
+            FROM applications
+            WHERE application_id = ?
+        """, (application_id,))
+
+        exists = cursor.fetchone() is not None
 
         values = [
             application_id,
             clean_row["student_id"],
             clean_row["first_name"],
             clean_row["last_name"],
+            clean_row["email"],
             clean_row["pop_type"],
             clean_row["semester"],
             clean_row["campus"],
@@ -140,7 +158,13 @@ def import_csv(filename):
 
         cursor.execute(query, values)
 
+        if exists:
+            stats["updated"] += 1
+        else:
+            stats["new"] += 1
+
     conn.commit()
     conn.close()
 
-    print("Import Complete")
+    print(stats)
+    return stats

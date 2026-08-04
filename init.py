@@ -1,6 +1,6 @@
 from db import init_database
-from import_csv import import_csv
+from import_csv import import_applications
 
 init_database()
 
-import_csv("incoming/test.csv")
+import_applications("incoming/test.csv")
