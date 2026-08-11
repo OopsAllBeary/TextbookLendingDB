@@ -4,10 +4,15 @@ from PySide6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
 
+from db import init_database
 
-app = QApplication(sys.argv)
+if __name__ == "__main__":
 
-window = MainWindow()
-window.show()
+    init_database()
 
-sys.exit(app.exec())
+    app = QApplication([])
+
+    window = MainWindow()
+    window.show()
+
+    app.exec()
