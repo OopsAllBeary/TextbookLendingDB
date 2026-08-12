@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QTextEdit,
-    QTableWidgetItem,
     QTableView,
     QHeaderView,
     QFormLayout,
@@ -20,12 +19,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QFileDialog,
     QMessageBox,
-    QDialog,
-    QListWidget,
-    QListWidgetItem,
-    QDialogButtonBox,
-    QCheckBox
+    QDialog
 )
+
+from gui.deleted_applications_dialog import DeletedApplicationsDialog
 
 from gui.column_settings_dialog import ColumnSettingsDialog
 
@@ -33,16 +30,13 @@ from import_csv import import_applications
 
 from email_handler import open_status_email
 
-from applications import (
-    get_all_applications,
-    DISPLAY_COLUMNS
-)
-
 from annotations import (
     set_status,
     set_notes,
     set_rsvp
 )
+
+from applications import delete_application
 
 DETAIL_FIELDS = [
     ("Student ID", "student_id"),
@@ -211,6 +205,24 @@ class MainWindow(QMainWindow):
         )
 
 
+        self.delete_button = QPushButton("Delete Application")
+        self.delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: #d9534f;
+                color: white;
+                font-weight: bold;
+                border: none;
+                padding: 5px 10px;}
+        """)
+
+        details_layout.addRow(QLabel(""))
+        details_layout.addRow(self.delete_button)
+
+        self.delete_button.clicked.connect(
+            self.delete_selected_application
+        )
+
+
     def setup_menu(self):
 
         menu_bar = self.menuBar()
@@ -254,6 +266,26 @@ class MainWindow(QMainWindow):
         settings_menu.addAction(
             columns_action
         )
+
+        deleted_applications_action = (
+            settings_menu.addAction(
+                "Deleted Applications"
+            )
+        )
+
+        deleted_applications_action.triggered.connect(
+            self.open_deleted_applications
+        )
+
+    def open_deleted_applications(self):
+
+        dialog = DeletedApplicationsDialog(
+            self
+        )
+
+        dialog.exec()
+
+        self.model.reload()
 
     def open_column_settings(self):
 
@@ -557,6 +589,52 @@ class MainWindow(QMainWindow):
             application["application_id"],
             application
         )
+
+        self.model.reload()
+
+    def delete_selected_application(self):
+
+        indexes = self.table.selectionModel().selectedRows()
+
+        if not indexes:
+            QMessageBox.information(
+                self,
+                "Delete Application",
+                "Please select an application first."
+            )
+            return
+
+        application = self.model.get_row(
+            indexes[0].row()
+        )
+
+        student_name = (
+            f"{application.get('first_name', '')} "
+            f"{application.get('last_name', '')}"
+        ).strip()
+
+        reply = QMessageBox.warning(
+            self,
+            "Delete Application",
+            (
+                f"Are you sure you want to delete "
+                f"the application for {student_name}?\n\n"
+                "This can be undone later."
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        self.save_current_application()
+
+        application_id = application["application_id"]
+
+        delete_application(application_id)
+
+        self.current_application_id = None
 
         self.model.reload()
 
