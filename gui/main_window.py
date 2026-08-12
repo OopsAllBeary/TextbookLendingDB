@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
     QCheckBox
 )
 
+from gui.column_settings_dialog import ColumnSettingsDialog
+
 from import_csv import import_applications
 
 from email_handler import open_status_email
@@ -60,138 +62,6 @@ DETAIL_FIELDS = [
 ]
 
 from gui.application_model import ApplicationTableModel
-
-class ColumnSettingsDialog(QDialog):
-
-    def __init__(self, columns, visible_columns, column_order, parent=None):
-        super().__init__(parent)
-
-        self.setWindowTitle("Column Settings")
-        self.setMinimumWidth(350)
-
-        layout = QVBoxLayout(self)
-
-        self.list_widget = QListWidget()
-
-        for column_index in column_order:
-
-            title, field_name = columns[column_index]
-
-            item = QListWidgetItem(title)
-
-            item.setData(
-                Qt.UserRole,
-                column_index
-            )
-
-            item.setFlags(
-                item.flags() |
-                Qt.ItemIsUserCheckable
-            )
-
-            if column_index in visible_columns:
-                item.setCheckState(Qt.Checked)
-            else:
-                item.setCheckState(Qt.Unchecked)
-
-            self.list_widget.addItem(item)
-
-        layout.addWidget(self.list_widget)
-
-        button_layout = QHBoxLayout()
-
-        self.up_button = QPushButton("↑")
-        self.down_button = QPushButton("↓")
-
-        self.up_button.clicked.connect(
-            self.move_up
-        )
-
-        self.down_button.clicked.connect(
-            self.move_down
-        )
-
-        button_layout.addStretch()
-        button_layout.addWidget(self.up_button)
-        button_layout.addWidget(self.down_button)
-        button_layout.addStretch()
-
-        layout.addLayout(button_layout)
-
-        dialog_buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok |
-            QDialogButtonBox.Cancel
-        )
-
-        dialog_buttons.accepted.connect(
-            self.accept
-        )
-
-        dialog_buttons.rejected.connect(
-            self.reject
-        )
-
-        layout.addWidget(dialog_buttons)
-
-    def move_up(self):
-
-        row = self.list_widget.currentRow()
-
-        if row <= 0:
-            return
-
-        item = self.list_widget.takeItem(row)
-
-        self.list_widget.insertItem(
-            row - 1,
-            item
-        )
-
-        self.list_widget.setCurrentRow(
-            row - 1
-        )
-
-    def move_down(self):
-
-        row = self.list_widget.currentRow()
-
-        if row < 0 or row >= self.list_widget.count() - 1:
-            return
-
-        item = self.list_widget.takeItem(row)
-
-        self.list_widget.insertItem(
-            row + 1,
-            item
-        )
-
-        self.list_widget.setCurrentRow(
-            row + 1
-        )
-
-    def get_settings(self):
-
-        column_order = []
-        visible_columns = set()
-
-        for row in range(self.list_widget.count()):
-
-            item = self.list_widget.item(row)
-
-            column_index = item.data(
-                Qt.UserRole
-            )
-
-            column_order.append(
-                column_index
-            )
-
-            if item.checkState() == Qt.Checked:
-                visible_columns.add(
-                    column_index
-                )
-
-        return column_order, visible_columns
 
 
 class MainWindow(QMainWindow):
@@ -391,7 +261,9 @@ class MainWindow(QMainWindow):
 
         column_order = []
 
-        for visual_index in range(header.count()):
+        for visual_index in range(
+            header.count()
+        ):
 
             logical_index = header.logicalIndex(
                 visual_index
@@ -403,7 +275,9 @@ class MainWindow(QMainWindow):
 
         visible_columns = set()
 
-        for column_index in range(header.count()):
+        for column_index in range(
+            header.count()
+        ):
 
             if not self.table.isColumnHidden(
                 column_index
@@ -412,17 +286,26 @@ class MainWindow(QMainWindow):
                     column_index
                 )
 
+        export_columns = self.get_export_columns()
+
         dialog = ColumnSettingsDialog(
             self.model.COLUMNS,
             visible_columns,
+            export_columns,
             column_order,
+            set(self.model.DEFAULT_COLUMNS),
+            set(self.model.DEFAULT_EXPORT_COLUMNS),
             self
         )
 
         if dialog.exec() != QDialog.Accepted:
             return
 
-        new_order, new_visible = dialog.get_settings()
+        (
+            new_order,
+            new_visible,
+            new_export
+        ) = dialog.get_settings()
 
         self.apply_column_settings(
             new_order,
@@ -431,8 +314,30 @@ class MainWindow(QMainWindow):
 
         self.save_column_settings(
             new_order,
-            new_visible
+            new_visible,
+            new_export
         )
+
+    def get_export_columns(self):
+
+        saved_export = self.settings.value(
+            "export_columns",
+            None
+        )
+
+        if saved_export is None:
+
+            return {
+                index
+                for index, (_, field_name)
+                in enumerate(self.model.COLUMNS)
+                if field_name in self.model.DEFAULT_EXPORT_COLUMNS
+            }
+
+        return {
+            int(value)
+            for value in saved_export
+        }
 
     def apply_column_settings(
         self,
@@ -442,7 +347,6 @@ class MainWindow(QMainWindow):
 
         header = self.table.horizontalHeader()
 
-        # Restore order
         for visual_index, logical_index in enumerate(
             column_order
         ):
@@ -458,7 +362,6 @@ class MainWindow(QMainWindow):
                     visual_index
                 )
 
-        # Apply visibility
         for column_index in range(
             self.model.columnCount()
         ):
@@ -471,7 +374,8 @@ class MainWindow(QMainWindow):
     def save_column_settings(
         self,
         column_order,
-        visible_columns
+        visible_columns,
+        export_columns
     ):
 
         self.settings.setValue(
@@ -482,6 +386,11 @@ class MainWindow(QMainWindow):
         self.settings.setValue(
             "visible_columns",
             list(visible_columns)
+        )
+
+        self.settings.setValue(
+            "export_columns",
+            list(export_columns)
         )
 
     def load_column_settings(self):
@@ -515,15 +424,16 @@ class MainWindow(QMainWindow):
                     saved_order.append(column_index)
 
         if saved_visible is None:
-            saved_visible = set()
 
-            for column_index, (_, field_name) in enumerate(
-                self.model.COLUMNS
-            ):
-                if field_name in self.model.DEFAULT_COLUMNS:
-                    saved_visible.add(column_index)
+            saved_visible = {
+                index
+                for index, (_, field_name)
+                in enumerate(self.model.COLUMNS)
+                if field_name in self.model.DEFAULT_COLUMNS
+            }
 
         else:
+
             saved_visible = {
                 int(value)
                 for value in saved_visible
@@ -727,23 +637,24 @@ Updated: {stats["updated"]}
                 )
                 return
 
-            excluded_fields = {
-                "current_data",
-                "last_seen_import",
-                "created_date",
-                "updated_date"
-            }
+            export_columns = self.get_export_columns()
 
             fieldnames = [
                 field_name
-                for _, field_name in self.model.COLUMNS
-                if field_name not in excluded_fields
+                for index, (_, field_name) 
+                in enumerate(self.model.COLUMNS)
+                if index in export_columns
             ]
 
-            for row in rows:
-                for field in row.keys():
-                    if field not in fieldnames and field not in excluded_fields:
-                        fieldnames.append(field)
+            if not fieldnames:
+
+                QMessageBox.warning(
+                    self,
+                    "Export",
+                    "Nocolumns are selected for export."
+                )
+
+                return
 
             with open(
                 filename,

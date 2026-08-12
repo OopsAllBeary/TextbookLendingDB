@@ -33,6 +33,23 @@ class ApplicationTableModel(QAbstractTableModel):
         "rsvp"
     ]
 
+    DEFAULT_EXPORT_COLUMNS = [
+        "student_id",
+        "first_name",
+        "last_name",
+        "email",
+        "pop_type",
+        "semester",
+        "campus",
+        "program",
+        "requested_books_devices",
+        "requested_device",
+        "course_names",
+        "status",
+        "notes",
+        "rsvp"
+    ]
+
     def __init__(self):
         super().__init__()
 
