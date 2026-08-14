@@ -25,6 +25,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+Output/
+*.db
+incoming/
+data/
 
 # PyPI configuration
 .pypirc
