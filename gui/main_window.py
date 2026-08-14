@@ -461,7 +461,18 @@ class MainWindow(QMainWindow):
                 label = QLabel()
 
                 label.setWordWrap(True)
-                label.setAlignment(Qt.AlignTop)
+
+                label.setAlignment(
+                    Qt.AlignTop
+                )
+
+                label.setTextInteractionFlags(
+                    Qt.TextSelectableByMouse
+                )
+
+                label.setCursor(
+                    Qt.IBeamCursor
+                )
 
                 self.detail_labels[field_name] = label
 
