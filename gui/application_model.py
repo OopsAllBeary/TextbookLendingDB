@@ -20,7 +20,8 @@ class ApplicationTableModel(QAbstractTableModel):
         ("Course Names", "course_names"),
         ("Status", "status"),
         ("Notes", "notes"),
-        ("RSVP", "rsvp")
+        ("RSVP", "rsvp"),
+        ("Emailed", "emailed")
     ]
 
     DEFAULT_COLUMNS = [
@@ -30,7 +31,8 @@ class ApplicationTableModel(QAbstractTableModel):
         "status",
         "requested_books_devices",
         "notes",
-        "rsvp"
+        "rsvp",
+        "emailed"
     ]
 
     DEFAULT_EXPORT_COLUMNS = [
@@ -82,7 +84,7 @@ class ApplicationTableModel(QAbstractTableModel):
 
         self.endResetModel()
 
-    def update_annotation(self, application_id, status, notes, rsvp):
+    def update_annotation(self, application_id, status, notes, rsvp, emailed):
 
         old_status = None
 
@@ -95,6 +97,7 @@ class ApplicationTableModel(QAbstractTableModel):
                 row["status"] = status
                 row["notes"] = notes
                 row["rsvp"] = rsvp
+                row["emailed"] = emailed
 
                 break
 
@@ -221,10 +224,16 @@ class ApplicationTableModel(QAbstractTableModel):
             if status == "new":
                 return QColor("#FFF59D")
 
+            if status == "waitlist":
+                return QColor("#7A608A")
+
         if role == Qt.ForegroundRole:
 
             if status == "new":
                 return QColor("#000000")
+
+            if status == "waitlist":
+                return QColor("#FFFFFF")
 
         return None
 

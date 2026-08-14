@@ -223,7 +223,7 @@ def migrate_database():
     if version < 4:
 
         print(
-            "Migrating database to schema version 2..."
+            "Migrating database to schema version 4..."
         )
 
         backup_database()
@@ -313,6 +313,63 @@ def migrate_database():
             conn.close()
 
         version = 4
+
+    if version < 5:
+    
+        print(
+            "Migrating database to schema version 5..."
+        )
+
+        backup_database()
+
+        conn = get_connection()
+
+        try:
+
+            cursor = conn.cursor()
+
+            
+
+            if not column_exists(
+                cursor,
+                "applications",
+                "emailed"
+            ):
+
+                cursor.execute("""
+                    ALTER TABLE annotations
+                    ADD COLUMN emailed INTEGER NOT NULL DEFAULT 0
+                """)
+
+            cursor.execute(
+                "PRAGMA user_version = 5"
+            )
+
+            conn.commit()
+
+            print(
+                "Database successfully migrated "
+                "to schema version 5."
+            )
+
+        except Exception:
+
+            conn.rollback()
+
+            print(
+                "Database migration failed. "
+                "Changes were rolled back."
+            )
+
+            raise
+
+        finally:
+
+            conn.close()
+
+        version = 5
+
+
 
 def column_exists(
     cursor,
@@ -559,7 +616,7 @@ def clear_database():
     finally:
 
         conn.close()
-        
+
 # ---------------------------------------------------------
 # Standalone initialization
 # ---------------------------------------------------------

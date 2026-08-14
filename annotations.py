@@ -55,10 +55,25 @@ def _update_annotation_field(application_id, field_name, value):
 
 
 def set_status(application_id, status):
+
+    status_map = {
+        "new": "New",
+        "approved": "Approved",
+        "denied": "Denied",
+        "waitlist": "WaitList",
+        "wait_list": "WaitList",
+        "wait list": "WaitList"
+    }
+
+    normalized_status = status_map.get(
+        str(status).strip().lower(),
+        "New"
+    )
+
     _update_annotation_field(
         application_id,
         "status",
-        status
+        normalized_status
     )
 
 
@@ -75,6 +90,13 @@ def set_rsvp(application_id, rsvp):
         application_id,
         "rsvp",
         rsvp
+    )
+
+def set_emailed(application_id, emailed):
+    _update_annotation_field(
+        application_id,
+        "emailed",
+        int(bool(emailed))
     )
 
 def save_imported_annotations(

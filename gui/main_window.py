@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QFormLayout,
     QComboBox,
+    QCheckBox,
     QAbstractItemView,
     QLineEdit,
     QLabel,
@@ -37,7 +38,9 @@ from email_handler import open_status_email
 from annotations import (
     set_status,
     set_notes,
-    set_rsvp
+    set_rsvp,
+    set_emailed,
+    get_annotation
 )
 
 from applications import delete_application
@@ -98,6 +101,7 @@ DETAIL_FIELDS = [
     ("Requested Device", "requested_device"),
     ("Course Names", "course_names"),
     ("Status", "status"),
+    ("Emailed", "emailed"),
     ("Notes", "notes"),
     ("RSVP", "rsvp")
 ]
@@ -439,6 +443,20 @@ class MainWindow(QMainWindow):
                     label_text + ":",
                     widget
                 )
+
+            elif field_name == "emailed":
+
+                widget = QCheckBox(
+                    "Emailed"
+                )
+
+                self.edit_widgets[field_name] = widget
+
+                details_layout.addRow(
+                    label_text + ":",
+                    widget
+                )
+
             else:
                 label = QLabel()
 
@@ -1051,7 +1069,24 @@ class MainWindow(QMainWindow):
         )
 
     def display_application(self, application):
-        self.current_application_id = application["application_id"]
+
+        self.current_application_id = (
+            application["application_id"]
+        )
+
+
+        # ---------------------------------------------------------
+        # Load annotations
+        # ---------------------------------------------------------
+
+        annotation = get_annotation(
+            self.current_application_id
+        )
+
+
+        # ---------------------------------------------------------
+        # Bookstore information
+        # ---------------------------------------------------------
 
         summary = get_bookstore_lookup_summary(
             self.current_application_id
@@ -1070,6 +1105,7 @@ class MainWindow(QMainWindow):
         self.view_bookstore_button.setEnabled(
             bool(materials)
         )
+
 
         if summary.get("lookup_id") is None:
 
@@ -1091,38 +1127,146 @@ class MainWindow(QMainWindow):
                 summary["lookup_date"]
             )
 
+
+        # ---------------------------------------------------------
+        # Application fields
+        # ---------------------------------------------------------
+
+        annotation_fields = {
+            "status",
+            "notes",
+            "rsvp",
+            "emailed"
+        }
+
+
         for _, field_name in DETAIL_FIELDS:
-            value = application.get(field_name) or ""
 
-            if field_name == "course_names":
-                value = value.replace(";", "\n")
-                value = value.replace(",", "\n")
+            # -----------------------------------------
+            # Get value from correct source
+            # -----------------------------------------
 
-            if field_name in self.edit_widgets:
-                widget = self.edit_widgets[field_name]
+            if field_name in annotation_fields:
 
-                if isinstance(widget, QComboBox):
+                if annotation is not None:
 
-                    if field_name == "status" and not value:
-                        value = "New"
+                    value = (
+                        annotation[field_name]
+                        if annotation[field_name] is not None
+                        else ""
+                    )
 
-                    widget.setCurrentText(str(value))
+                else:
 
-                elif isinstance(widget, QTextEdit):
-                    widget.setPlainText(str(value))
+                    value = ""
+
 
             else:
-                self.detail_labels[field_name].setText(str(value))
 
-        lookup_summary = get_bookstore_lookup_summary(
-            self.current_application_id
-        )
+                value = (
+                    application.get(
+                        field_name
+                    ) or ""
+                )
 
-        total_current_price = (
-            get_bookstore_total_current_price(
-                self.current_application_id
-            )
-        )
+
+            # -----------------------------------------
+            # Formatting
+            # -----------------------------------------
+
+            if field_name == "course_names":
+
+                value = value.replace(
+                    ";",
+                    "\n"
+                )
+
+                value = value.replace(
+                    ",",
+                    "\n"
+                )
+
+
+            # -----------------------------------------
+            # Editable widgets
+            # -----------------------------------------
+
+            if field_name in self.edit_widgets:
+
+                widget = self.edit_widgets[
+                    field_name
+                ]
+
+
+                # Status
+                if isinstance(
+                    widget,
+                    QComboBox
+                ):
+
+                    if field_name == "status":
+
+                        if not value:
+                            value = "New"
+
+                        status_map = {
+                            "new": "New",
+                            "approved": "Approved",
+                            "denied": "Denied",
+                            "waitlist": "WaitList",
+                            "wait_list": "WaitList",
+                            "wait list": "WaitList"
+                        }
+
+                        normalized_status = status_map.get(
+                            str(value).strip().lower(),
+                            "New"
+                        )
+
+                        widget.setCurrentText(
+                            normalized_status
+                        )
+
+                    else:
+
+                        widget.setCurrentText(
+                            str(value)
+                        )
+
+
+                # Text fields
+                elif isinstance(
+                    widget,
+                    QTextEdit
+                ):
+
+                    widget.setPlainText(
+                        str(value)
+                    )
+
+
+                # Emailed checkbox
+                elif isinstance(
+                    widget,
+                    QCheckBox
+                ):
+
+                    widget.setChecked(
+                        bool(value)
+                    )
+
+
+            # -----------------------------------------
+            # Read-only labels
+            # -----------------------------------------
+
+            else:
+
+                self.detail_labels[
+                    field_name
+                ].setText(
+                    str(value)
+                )
 
     def save_annotation_changes(self, application_id, application):
 
@@ -1131,6 +1275,7 @@ class MainWindow(QMainWindow):
         status = self.edit_widgets["status"].currentText().strip()
         notes = self.edit_widgets["notes"].toPlainText()
         rsvp = self.edit_widgets["rsvp"].toPlainText()
+        emailed = self.edit_widgets["emailed"].isChecked()
 
         status_changed = old_status != status
 
@@ -1153,6 +1298,11 @@ class MainWindow(QMainWindow):
             rsvp
         )
 
+        set_emailed(
+            application_id,
+            emailed
+        )
+
         if (
             status_changed
             and self.auto_email_action.isChecked()
@@ -1170,7 +1320,8 @@ class MainWindow(QMainWindow):
             application_id,
             status,
             notes,
-            rsvp
+            rsvp,
+            emailed
         )
 
     def save_changes(self):
