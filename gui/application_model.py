@@ -251,6 +251,9 @@ class ApplicationTableModel(QAbstractTableModel):
     def get_all_rows(self):
         return self._all_rows
 
+    def get_filtered_rows(self):
+        return self._rows
+
     def get_status(self, application_id):
 
         for row in self._all_rows:

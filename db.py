@@ -220,42 +220,85 @@ def migrate_database():
         version = 1
 
 
-    if version < 3:
+    if version < 4:
 
         print(
             "Migrating database to schema version 2..."
         )
-    
+
         backup_database()
-        
+
         conn = get_connection()
-        
+
         try:
+
             cursor = conn.cursor()
-        
-            cursor.execute("""
-                ALTER TABLE applications
-                ADD COLUMN is_deleted INTEGER
-                NOT NULL DEFAULT 0
-            """)
 
             cursor.execute("""
-                ALTER TABLE applications
-                ADD COLUMN deleted_date TEXT
+                CREATE TABLE IF NOT EXISTS bookstore_lookups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    application_id TEXT NOT NULL,
+
+                    student_id TEXT,
+                    program_id TEXT,
+                    term_id TEXT,
+
+                    lookup_date TEXT NOT NULL,
+
+                    FOREIGN KEY(application_id)
+                        REFERENCES applications(application_id)
+                )
             """)
-        
+
+            if not column_exists(
+                cursor,
+                "applications",
+                "bookstore_total_current_price"
+            ):
+
+                cursor.execute("""
+                    ALTER TABLE applications
+                    ADD COLUMN bookstore_total_current_price REAL
+                """)
+
+
+            if not column_exists(
+                cursor,
+                "applications",
+                "bookstore_last_lookup"
+            ):
+
+                cursor.execute("""
+                    ALTER TABLE applications
+                    ADD COLUMN bookstore_last_lookup TEXT
+                """)
+
+
+            if not column_exists(
+                cursor,
+                "bookstore_materials",
+                "lookup_id"
+            ):
+
+                cursor.execute("""
+                    ALTER TABLE bookstore_materials
+                    ADD COLUMN lookup_id INTEGER
+                """)
+
             cursor.execute(
-                "PRAGMA user_version = 3"
+                "PRAGMA user_version = 4"
             )
-        
+
             conn.commit()
 
             print(
                 "Database successfully migrated "
-                "to schema version 3."
+                "to schema version 4."
             )
-        
+
         except Exception:
+
             conn.rollback()
 
             print(
@@ -264,10 +307,28 @@ def migrate_database():
             )
 
             raise
-        
+
         finally:
+
             conn.close()
 
+        version = 4
+
+def column_exists(
+    cursor,
+    table_name,
+    column_name
+):
+    cursor.execute(
+        f"PRAGMA table_info({table_name})"
+    )
+
+    columns = cursor.fetchall()
+
+    return any(
+        row["name"] == column_name
+        for row in columns
+    )
 
 # ---------------------------------------------------------
 # Initialize database
@@ -355,6 +416,88 @@ def init_database():
             )
         """)
 
+        # -----------------------------------------------------
+        # Bookstore Materials
+        # -----------------------------------------------------
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookstore_materials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                application_id TEXT NOT NULL,
+                lookup_id INTEGER,
+
+                course TEXT,
+                section TEXT,
+
+                title TEXT,
+                author TEXT,
+                edition TEXT,
+
+                isbn TEXT,
+
+                material_type TEXT,
+                requirement_type TEXT,
+                requirement_label TEXT,
+
+                publisher TEXT,
+                copyright_year TEXT,
+
+                is_package INTEGER DEFAULT 0,
+                included_material INTEGER DEFAULT 0,
+
+                created_date TEXT NOT NULL,
+
+                FOREIGN KEY(application_id)
+                    REFERENCES applications(application_id)
+            )
+            """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookstore_selections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                material_id INTEGER NOT NULL,
+
+                option_type TEXT,
+                option_label TEXT,
+
+                price REAL,
+                price_display TEXT,
+
+                availability TEXT,
+                binding TEXT,
+
+                sku TEXT,
+
+                breakage_charge REAL,
+                restocking_fee REAL,
+                non_rental_charges REAL,
+
+                selected_date TEXT NOT NULL,
+
+                FOREIGN KEY(material_id)
+                    REFERENCES bookstore_materials(id)
+            )
+            """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookstore_lookups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                application_id TEXT NOT NULL,
+
+                student_id TEXT,
+                program_id TEXT,
+                term_id TEXT,
+
+                lookup_date TEXT NOT NULL,
+
+                FOREIGN KEY(application_id)
+                    REFERENCES applications(application_id)
+            )
+        """)
+
         conn.commit()
 
     finally:
@@ -363,6 +506,60 @@ def init_database():
     migrate_database()
 
 
+def clear_database():
+
+    conn = get_connection()
+
+    try:
+
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "PRAGMA foreign_keys = OFF"
+        )
+
+        cursor.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+            AND name NOT LIKE 'sqlite_%'
+            """
+        )
+
+        tables = [
+            row["name"]
+            for row in cursor.fetchall()
+        ]
+
+        for table in tables:
+
+            cursor.execute(
+                f'DELETE FROM "{table}"'
+            )
+
+        # Reset AUTOINCREMENT counters.
+        try:
+
+            cursor.execute(
+                "DELETE FROM sqlite_sequence"
+            )
+
+        except Exception:
+
+            pass
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+        raise
+
+    finally:
+
+        conn.close()
+        
 # ---------------------------------------------------------
 # Standalone initialization
 # ---------------------------------------------------------

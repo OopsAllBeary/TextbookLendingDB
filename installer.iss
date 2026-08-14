@@ -1,5 +1,5 @@
 #define tlAppName "Textbook Lending Tracker"
-#define tlAppVersion "1.2.0"
+#define tlAppVersion "2.1.0"
 #define tlAppPublisher "Bear"
 #define tlAppExeName "TextbookLendingTracker.exe"
 

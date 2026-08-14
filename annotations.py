@@ -77,37 +77,84 @@ def set_rsvp(application_id, rsvp):
         rsvp
     )
 
-# def update_annotation(application_id, status=None, notes=None, rsvp=None):
+def save_imported_annotations(
+    cursor,
+    application_id,
+    notes=None,
+    rsvp=None,
+    status=None
+):
 
-#     conn = get_connection()
-#     cursor = conn.cursor()
+    # Make sure an annotation row exists
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO annotations (
+            application_id,
+            created_date
+        )
+        VALUES (?, ?)
+        """,
+        (
+            application_id,
+            datetime.now().isoformat()
+        )
+    )
 
-#     cursor.execute("""
-#     INSERT INTO annotations (
-#         application_id,
-#         status,
-#         notes,
-#         rsvp,
-#         created_date,
-#         updated_date
-#     )
-#     VALUES (?, ?, ?, ?, ?, ?)
+    updates = []
+    values = []
 
-#     ON CONFLICT(application_id)
-#     DO UPDATE SET
-#         status = COALESCE(excluded.status, annotations.status), 
-#         notes = COALESCE(excluded.notes, annotations.notes), 
-#         rsvp = COALESCE(excluded.rsvp, annotations.rsvp), 
-#         updated_date = excluded.updated_date
+    if notes is not None:
 
-#     """, (
-#         application_id,
-#         status,
-#         notes,
-#         rsvp,
-#         datetime.now().isoformat(),
-#         datetime.now().isoformat()
-#     ))
+        updates.append(
+            "notes = ?"
+        )
 
-#     conn.commit()
-#     conn.close()
+        values.append(
+            notes
+        )
+
+    if rsvp is not None:
+
+        updates.append(
+            "rsvp = ?"
+        )
+
+        values.append(
+            rsvp
+        )
+
+    if status is not None:
+
+        updates.append(
+            "status = ?"
+        )
+
+        values.append(
+            status
+        )
+
+    if not updates:
+        return
+
+    updates.append(
+        "updated_date = ?"
+    )
+
+    values.append(
+        datetime.now().isoformat()
+    )
+
+    values.append(
+        application_id
+    )
+
+    cursor.execute(
+        f"""
+        UPDATE annotations
+        SET
+            {", ".join(updates)}
+        WHERE application_id = ?
+        """,
+        values
+    )
+

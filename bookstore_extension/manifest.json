@@ -1,0 +1,42 @@
+{
+    "manifest_version": 3,
+
+    "name": "Textbook Lending Tracker - Bookstore",
+    "version": "1.0.0",
+
+    "description": "Connects the Textbook Lending Tracker to bookstore course material results.",
+
+    "permissions": [],
+
+    "host_permissions": [
+        "https://www.bkstr.com/*",
+        "https://svc.bkstr.com/*",
+        "http://127.0.0.1:8765/*"
+    ],
+
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.bkstr.com/*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://www.bkstr.com/*"
+            ],
+            "js": [
+                "page-hook.js"
+            ],
+            "run_at": "document_start",
+            "world": "MAIN"
+        }
+    ],
+
+    "background": {
+        "service_worker": "background.js"
+    }
+}
