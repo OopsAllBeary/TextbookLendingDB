@@ -1,3 +1,4 @@
+
 def parse_bookstore_response(data):
 
     print(
@@ -86,267 +87,377 @@ def parse_bookstore_response(data):
                     continue
 
 
-                requirement_type = (
-                    raw_material.get(
-                        "requirementType"
-                    )
-                    or ""
-                )
-
-
-                requirement_label = (
-                    requirement_labels.get(
-                        requirement_type,
-                        requirement_type
-                    )
-                )
-
-
-                material = {
-
-                    # ---------------------------------
-                    # COURSE INFORMATION
-                    # ---------------------------------
-
-                    "course": (
-                        course_section.get(
-                            "course"
-                        )
-                        or course_section.get(
-                            "courseDescriptorCode"
-                        )
-                        or ""
-                    ),
-
-                    "course_id": (
-                        course_section.get(
-                            "courseId"
-                        )
-                        or ""
-                    ),
-
-                    "campus": (
-                        course_section.get(
-                            "campusName"
-                        )
-                        or ""
-                    ),
-
-
-                    # ---------------------------------
-                    # MATERIAL INFORMATION
-                    # ---------------------------------
-
-                    "title": (
-                        raw_material.get(
-                            "title"
-                        )
-                        or ""
-                    ),
-
-                    "author": (
-                        raw_material.get(
-                            "author"
-                        )
-                        or ""
-                    ),
-
-                    "edition": (
-                        raw_material.get(
-                            "edition"
-                        )
-                        or ""
-                    ),
-
-                    "isbn": (
-                        raw_material.get(
-                            "isbn"
-                        )
-                        or raw_material.get(
-                            "isbnDisplay"
-                        )
-                        or ""
-                    ),
-
-                    "publisher": (
-                        raw_material.get(
-                            "publisher"
-                        )
-                        or ""
-                    ),
-
-                    "material_type": (
-                        raw_material.get(
-                            "materialType"
-                        )
-                        or ""
-                    ),
-
-                    "requirement_type":
-                        requirement_type,
-
-                    "requirement_label":
-                        requirement_label,
-
-                    "included_material": (
-                        raw_material.get(
-                            "includEDMaterialFlag",
-                            False
-                        )
-                    ),
-
-                    "is_package": (
-                        raw_material.get(
-                            "isPackage",
-                            False
-                        )
-                    ),
-
-                    "price_range": (
-                        raw_material.get(
-                            "priceRangeDisplay"
-                        )
-                        or ""
-                    ),
-
-                    "image": (
-                        raw_material.get(
-                            "bookImage"
-                        )
-                        or ""
-                    ),
-
-                    # We populate this below.
-                    "options": []
-                }
-
-
                 # ---------------------------------
-                # PURCHASE / RENTAL OPTIONS
+                # Determine actual materials
                 # ---------------------------------
 
-                raw_options = (
-                    raw_material.get(
-                        "printItemDTOs",
-                        {}
-                    )
+                nested_materials = raw_material.get(
+                    "allMaterials"
                 )
 
 
-                if isinstance(
-                    raw_options,
-                    dict
+                if (
+                    isinstance(
+                        nested_materials,
+                        list
+                    )
+                    and nested_materials
                 ):
 
-                    for (
-                        option_type,
-                        option_data
-                    ) in raw_options.items():
+                    materials_to_process = (
+                        nested_materials
+                    )
 
-                        if not isinstance(
-                            option_data,
-                            dict
-                        ):
-                            continue
+                else:
+
+                    materials_to_process = [
+                        raw_material
+                    ]
 
 
-                        price = _money_value(
-                            option_data.get(
-                                "priceNumeric"
-                            )
+                # ---------------------------------
+                # Process each material
+                # ---------------------------------
+
+                for actual_material in materials_to_process:
+
+                    if not isinstance(
+                        actual_material,
+                        dict
+                    ):
+                        continue
+
+
+                    requirement_type = (
+                        actual_material.get(
+                            "requirementType"
                         )
+                        or raw_material.get(
+                            "requirementType"
+                        )
+                        or ""
+                    )
 
 
-                        if price is None:
+                    requirement_label = (
+                        requirement_labels.get(
+                            requirement_type,
+                            requirement_type
+                        )
+                    )
 
-                            price = _money_value(
-                                option_data.get(
-                                    "priceDisplay"
-                                )
+                    department = (
+                        course_section.get("department")
+                        or course_section.get("departmentName")
+                        or course_section.get("departmentDescriptorCode")
+                        or ""
+                    ).strip()
+
+                    course_number = (
+                        course_section.get("course")
+                        or course_section.get("courseName")
+                        or course_section.get("courseDescriptorCode")
+                        or ""
+                    ).strip()
+
+                    course_display = (
+                        f"{department} {course_number}"
+                    ).strip()
+
+
+                    material = {
+
+                        # ---------------------------------
+                        # COURSE INFORMATION
+                        # ---------------------------------
+
+                        "course": course_display,
+
+                        "course_id": (
+                            course_section.get(
+                                "courseId"
                             )
+                            or ""
+                        ),
+
+                        "campus": (
+                            course_section.get(
+                                "campusName"
+                            )
+                            or ""
+                        ),
 
 
-                        option = {
+                        # ---------------------------------
+                        # MATERIAL INFORMATION
+                        # ---------------------------------
 
-                            "type":
-                                option_type,
+                        "title": (
+                            actual_material.get(
+                                "title"
+                            )
+                            or ""
+                        ),
 
-                            "label":
-                                _option_label(
-                                    option_type
-                                ),
+                        "author": (
+                            actual_material.get(
+                                "author"
+                            )
+                            or ""
+                        ),
 
-                            "price":
-                                price,
+                        "edition": (
+                            actual_material.get(
+                                "edition"
+                            )
+                            or ""
+                        ),
 
-                            "price_display": (
-                                option_data.get(
-                                    "priceDisplay"
-                                )
-                                or ""
-                            ),
+                        "isbn": (
+                            actual_material.get(
+                                "isbn"
+                            )
+                            or actual_material.get(
+                                "isbnDisplay"
+                            )
+                            or ""
+                        ),
 
-                            "availability": (
-                                option_data.get(
-                                    "inventoryStatusDB"
-                                )
-                                or option_data.get(
-                                    "inventoryStatusBus"
-                                )
-                                or ""
-                            ),
+                        "publisher": (
+                            actual_material.get(
+                                "publisher"
+                            )
+                            or ""
+                        ),
 
-                            "binding": (
-                                option_data.get(
-                                    "binding"
-                                )
-                                or ""
-                            ),
+                        "material_type": (
+                            actual_material.get(
+                                "materialType"
+                            )
+                            or ""
+                        ),
 
-                            "sku": (
-                                option_data.get(
-                                    "skuPartNumber"
-                                )
-                                or ""
-                            ),
+                        "requirement_type":
+                            requirement_type,
 
-                            "item_id": (
-                                option_data.get(
-                                    "itemCatentryId"
-                                )
-                                or ""
-                            ),
+                        "requirement_label":
+                            requirement_label,
 
-                            "preselected": (
-                                option_data.get(
-                                    "preselected",
+                        "included_material": (
+                            actual_material.get(
+                                "includEDMaterialFlag",
+                                actual_material.get(
+                                    "includedMaterial",
                                     False
                                 )
                             )
-                        }
+                        ),
+
+                        "is_package": (
+                            actual_material.get(
+                                "isPackage",
+                                False
+                            )
+                        ),
+
+                        "price_range": (
+                            actual_material.get(
+                                "priceRangeDisplay"
+                            )
+                            or ""
+                        ),
+
+                        "image": (
+                            actual_material.get(
+                                "bookImage"
+                            )
+                            or ""
+                        ),
+
+                        "options": []
+                    }
 
 
-                        material[
-                            "options"
-                        ].append(
-                            option
+                    # ---------------------------------
+                    # PURCHASE / RENTAL / DIGITAL OPTIONS
+                    # ---------------------------------
+
+                    raw_options = (
+                        actual_material.get(
+                            "printItemDTOs",
+                            {}
+                        )
+                    )
+
+
+                    if isinstance(
+                        raw_options,
+                        dict
+                    ):
+
+                        for (
+                            option_type,
+                            option_data
+                        ) in raw_options.items():
+
+                            if not isinstance(
+                                option_data,
+                                dict
+                            ):
+                                continue
+
+
+                            price = _money_value(
+                                option_data.get(
+                                    "priceNumeric"
+                                )
+                            )
+
+
+                            if price is None:
+
+                                price = _money_value(
+                                    option_data.get(
+                                        "priceDisplay"
+                                    )
+                                )
+
+
+                            option = {
+
+                                "type":
+                                    option_type,
+
+                                "label":
+                                    _option_label(
+                                        option_type
+                                    ),
+
+                                "price":
+                                    price,
+
+                                "price_display": (
+                                    option_data.get(
+                                        "priceDisplay"
+                                    )
+                                    or ""
+                                ),
+
+                                "availability": (
+                                    option_data.get(
+                                        "inventoryStatusDB"
+                                    )
+                                    or option_data.get(
+                                        "inventoryStatusBus"
+                                    )
+                                    or ""
+                                ),
+
+                                "binding": (
+                                    option_data.get(
+                                        "binding"
+                                    )
+                                    or ""
+                                ),
+
+                                "sku": (
+                                    option_data.get(
+                                        "skuPartNumber"
+                                    )
+                                    or ""
+                                ),
+
+                                "item_id": (
+                                    option_data.get(
+                                        "itemCatentryId"
+                                    )
+                                    or ""
+                                ),
+
+                                "preselected": (
+                                    option_data.get(
+                                        "preselected",
+                                        False
+                                    )
+                                )
+                            }
+
+
+                            material[
+                                "options"
+                            ].append(
+                                option
+                            )
+
+
+                    # ---------------------------------
+                    # FALLBACK TO MATERIAL PRICE
+                    # ---------------------------------
+
+                    if not material["options"]:
+
+                        fallback_price = _money_value(
+                            actual_material.get(
+                                "priceRangeDisplay"
+                            )
                         )
 
 
-                # ---------------------------------
-                # DETERMINE CATEGORY
-                # ---------------------------------
+                        if fallback_price is not None:
 
-                material[
-                    "category"
-                ] = get_material_category(
-                    material
-                )
+                            material[
+                                "options"
+                            ].append(
+                                {
+                                    "type": "DIGITAL",
+
+                                    "label": "Digital",
+
+                                    "price":
+                                        fallback_price,
+
+                                    "price_display":
+                                        actual_material.get(
+                                            "priceRangeDisplay"
+                                        ),
+
+                                    "availability": "",
+
+                                    "binding": "",
+
+                                    "sku": (
+                                        actual_material.get(
+                                            "productPartNumber"
+                                        )
+                                        or ""
+                                    ),
+
+                                    "item_id": (
+                                        actual_material.get(
+                                            "productCatentryId"
+                                        )
+                                        or ""
+                                    ),
+
+                                    "preselected": True
+                                }
+                            )
 
 
-                materials.append(
-                    material
-                )
+                    # ---------------------------------
+                    # DETERMINE CATEGORY
+                    # ---------------------------------
+
+                    material[
+                        "category"
+                    ] = get_material_category(
+                        material
+                    )
+
+
+                    materials.append(
+                        material
+                    )
 
 
     total_current_price = 0.0
@@ -360,8 +471,35 @@ def parse_bookstore_response(data):
             []
         )
 
-        # Prefer the first available option.
-        if options:
+
+        # ---------------------------------
+        # Prefer preselected option
+        # ---------------------------------
+
+        for option in options:
+
+            if option.get(
+                "preselected"
+            ):
+
+                option_price = option.get(
+                    "price"
+                )
+
+                if option_price is not None:
+
+                    price = float(
+                        option_price
+                    )
+
+                    break
+
+
+        # ---------------------------------
+        # Otherwise use first priced option
+        # ---------------------------------
+
+        if price is None:
 
             for option in options:
 

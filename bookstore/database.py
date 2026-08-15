@@ -1,3 +1,5 @@
+import json
+
 from datetime import datetime
 
 from db import get_connection
@@ -35,11 +37,12 @@ def save_bookstore_results(
                     copyright_year,
                     is_package,
                     included_material,
+                    options_json,
                     created_date
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -82,6 +85,13 @@ def save_bookstore_results(
                         material.get(
                             "included_material",
                             False
+                        )
+                    ),
+
+                    json.dumps(
+                        material.get(
+                            "options",
+                            []
                         )
                     ),
 
@@ -161,6 +171,42 @@ def delete_bookstore_selection(
 
         conn.rollback()
         raise
+
+    finally:
+
+        conn.close()
+
+def get_all_bookstore_selections_for_backup():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                material_id,
+                option_type,
+                option_label,
+                price,
+                price_display,
+                availability,
+                binding,
+                sku,
+                breakage_charge,
+                restocking_fee,
+                non_rental_charges,
+                selected_date
+            FROM bookstore_selections
+            ORDER BY id
+            """
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
 
     finally:
 
@@ -255,7 +301,7 @@ def save_bookstore_selection(
     finally:
 
         conn.close()
-        
+
 def save_bookstore_lookup(
     application_id,
     total_current_price
@@ -443,10 +489,42 @@ def get_bookstore_materials(
             )
         )
 
-        return [
-            dict(row)
-            for row in cursor.fetchall()
-        ]
+        rows = cursor.fetchall()
+
+        materials = []
+
+        for row in rows:
+
+            material = dict(row)
+
+            options_json = material.get(
+                "options_json"
+            )
+
+            if options_json:
+
+                try:
+
+                    material["options"] = json.loads(
+                        options_json
+                    )
+
+                except (
+                    json.JSONDecodeError,
+                    TypeError
+                ):
+
+                    material["options"] = []
+
+            else:
+
+                material["options"] = []
+
+            materials.append(
+                material
+            )
+
+        return materials
 
     finally:
 
@@ -541,6 +619,126 @@ def get_master_book_list():
 
         conn.close()
 
+def clear_all_bookstore_selections():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            DELETE FROM bookstore_selections
+            """
+        )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+        raise
+
+    finally:
+
+        conn.close()
+
+def restore_bookstore_selections(
+    selections
+):
+
+    if not selections:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        for selection in selections:
+
+            cursor.execute(
+                """
+                INSERT INTO bookstore_selections (
+                    material_id,
+                    option_type,
+                    option_label,
+                    price,
+                    price_display,
+                    availability,
+                    binding,
+                    sku,
+                    breakage_charge,
+                    restocking_fee,
+                    non_rental_charges,
+                    selected_date
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    selection.get(
+                        "material_id"
+                    ),
+
+                    selection.get(
+                        "option_type"
+                    ),
+
+                    selection.get(
+                        "option_label"
+                    ),
+
+                    selection.get(
+                        "price"
+                    ),
+
+                    selection.get(
+                        "price_display"
+                    ),
+
+                    selection.get(
+                        "availability"
+                    ),
+
+                    selection.get(
+                        "binding"
+                    ),
+
+                    selection.get(
+                        "sku"
+                    ),
+
+                    selection.get(
+                        "breakage_charge"
+                    ),
+
+                    selection.get(
+                        "restocking_fee"
+                    ),
+
+                    selection.get(
+                        "non_rental_charges"
+                    ),
+
+                    selection.get(
+                        "selected_date"
+                    )
+                )
+            )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+        raise
+
+    finally:
+
+        conn.close()
+        
 def get_bookstore_selections_total():
 
     conn = get_connection()
@@ -600,6 +798,7 @@ def delete_bookstore_selection(selection_id):
 def get_all_bookstore_selections():
 
     conn = get_connection()
+
     cursor = conn.cursor()
 
     try:
@@ -611,11 +810,29 @@ def get_all_bookstore_selections():
                 bm.id AS material_id,
                 bm.isbn,
                 bl.student_id,
+
+                TRIM(
+                    COALESCE(
+                        a.first_name,
+                        ''
+                    )
+                    || ' '
+                    ||
+                    COALESCE(
+                        a.last_name,
+                        ''
+                    )
+                ) AS student_name,
+
                 bs.price,
                 bs.price_display,
+
                 bs.option_label,
+
                 bm.title,
-                bm.author
+
+                bm.course
+
             FROM bookstore_selections bs
 
             JOIN bookstore_materials bm
@@ -624,7 +841,11 @@ def get_all_bookstore_selections():
             JOIN bookstore_lookups bl
                 ON bm.lookup_id = bl.id
 
+            JOIN applications a
+                ON bl.application_id = a.application_id
+
             ORDER BY
+                bm.course,
                 bm.title
             """
         )
@@ -637,7 +858,6 @@ def get_all_bookstore_selections():
     finally:
 
         conn.close()
-
 
 def delete_bookstore_selection(selection_id):
 
@@ -660,6 +880,148 @@ def delete_bookstore_selection(selection_id):
 
         conn.rollback()
         raise
+
+    finally:
+
+        conn.close()
+
+def get_bookstore_selected_total(application_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(
+                    SUM(bs.price),
+                    0
+                ) AS total
+
+            FROM bookstore_selections bs
+
+            JOIN bookstore_materials bm
+                ON bs.material_id = bm.id
+
+            JOIN bookstore_lookups bl
+                ON bm.lookup_id = bl.id
+
+            WHERE bl.application_id = ?
+            """,
+            (application_id,)
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return 0.0
+
+        return float(
+            row["total"] or 0
+        )
+
+    finally:
+
+        conn.close()
+
+def get_bookstore_selections_for_application(
+    application_id
+):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                bs.material_id,
+                bs.option_type,
+                bs.sku
+
+            FROM bookstore_selections bs
+
+            JOIN bookstore_materials bm
+                ON bs.material_id = bm.id
+
+            JOIN bookstore_lookups bl
+                ON bm.lookup_id = bl.id
+
+            WHERE bl.application_id = ?
+
+            AND bl.id = (
+                SELECT id
+                FROM bookstore_lookups
+                WHERE application_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            """,
+            (
+                application_id,
+                application_id
+            )
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
+
+    finally:
+
+        conn.close()
+
+def get_bookstore_selections_for_application(
+    application_id
+):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                bs.material_id,
+                bs.option_type,
+                bs.option_label,
+                bs.price,
+                bs.price_display,
+                bs.sku
+
+            FROM bookstore_selections bs
+
+            JOIN bookstore_materials bm
+                ON bs.material_id = bm.id
+
+            JOIN bookstore_lookups bl
+                ON bm.lookup_id = bl.id
+
+            WHERE bl.application_id = ?
+
+            AND bl.id = (
+                SELECT id
+                FROM bookstore_lookups
+                WHERE application_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            """,
+            (
+                application_id,
+                application_id
+            )
+        )
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
 
     finally:
 

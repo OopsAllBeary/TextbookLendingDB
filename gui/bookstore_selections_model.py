@@ -11,9 +11,9 @@ class BookstoreSelectionsModel(
     COLUMNS = [
         ("ISBN", "isbn"),
         ("Student ID", "student_id"),
+        ("Student Name", "student_name"),
         ("Title", "title"),
-        ("Author", "author"),
-        ("Option", "option_label"),
+        ("Course", "course"),
         ("Price", "price_display")
     ]
 

@@ -87,6 +87,8 @@ chrome.runtime.onMessage.addListener(
                 "Could not contact Textbook Lending Tracker:",
                 error
             );
+
+            lookupBeingSent = false;
         });
 
 
@@ -244,7 +246,7 @@ async function checkForBookstoreLookup() {
             tab.id
         );
 
-        await chrome.tabs.sendMessage(
+        await sendLookupToTab(
             tab.id,
             lookup
         );
@@ -369,20 +371,6 @@ async function waitForContentScript(
 }
 
 
-console.log(
-    "BOOKSTORE POLLING STARTED"
-);
-
-
-setInterval(
-    checkForBookstoreLookup,
-    2000
-);
-
-
-checkForBookstoreLookup();
-
-
 
 function wait(ms) {
 
@@ -466,6 +454,7 @@ async function sendLookupToTab(
 }
 
 
+
 console.log(
     "BOOKSTORE POLLING STARTED"
 );
@@ -473,15 +462,8 @@ console.log(
 
 setInterval(
     checkForBookstoreLookup,
-    250
+    2000
 );
 
 
 checkForBookstoreLookup();
-
-console.log("BOOKSTORE POLLING STARTED");
-
-setInterval(
-    checkForBookstoreLookup,
-    2000
-);

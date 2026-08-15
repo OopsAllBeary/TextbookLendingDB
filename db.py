@@ -369,6 +369,61 @@ def migrate_database():
 
         version = 5
 
+    if version < 6:
+        
+        print(
+            "Migrating database to schema version 6..."
+        )
+
+        backup_database()
+
+        conn = get_connection()
+
+        try:
+
+            cursor = conn.cursor()
+
+            
+
+            if not column_exists(
+                cursor,
+                "bookstore_materials",
+                "options_json"
+            ):
+
+                cursor.execute("""
+                    ALTER TABLE bookstore_materials
+                    ADD COLUMN options_json TEXT;
+                """)
+
+            cursor.execute(
+                "PRAGMA user_version = 6"
+            )
+
+            conn.commit()
+
+            print(
+                "Database successfully migrated "
+                "to schema version 6."
+            )
+
+        except Exception:
+
+            conn.rollback()
+
+            print(
+                "Database migration failed. "
+                "Changes were rolled back."
+            )
+
+            raise
+
+        finally:
+
+            conn.close()
+
+        version = 6
+
 
 
 def column_exists(

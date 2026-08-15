@@ -1,6 +1,7 @@
 console.log("BOOKSTORE CONTENT SCRIPT LOADED");
 
 let currentLookup = null;
+let lookupInProgress = false;
 
 window.addEventListener(
     "message",
@@ -25,10 +26,12 @@ window.addEventListener(
             return;
         }
 
+
         console.log(
             "BOOKSTORE RESULTS RECEIVED FROM PAGE:",
             message.data
         );
+
 
         chrome.runtime.sendMessage(
             {
@@ -38,7 +41,23 @@ window.addEventListener(
                 data:
                     message.data
             }
-        );
+        )
+        .then(() => {
+
+            lookupInProgress = false;
+            currentLookup = null;
+
+        })
+        .catch(error => {
+
+            console.error(
+                "Could not send results to background:",
+                error
+            );
+
+            lookupInProgress = false;
+
+        });
     }
 );
 
@@ -62,21 +81,43 @@ chrome.runtime.onMessage.addListener(
             return;
         }
 
+
         console.log(
             "BOOKSTORE MESSAGE RECEIVED:",
             message
         );
 
+
         if (
-            message.type !==
+            message?.type !==
             "bookstore_lookup"
         ) {
             return;
         }
 
+
+        if (lookupInProgress) {
+
+            console.log(
+                "Bookstore lookup already in progress."
+            );
+
+            sendResponse({
+                success: false,
+                reason: "lookup_in_progress"
+            });
+
+            return;
+        }
+
+
+        lookupInProgress = true;
+
         currentLookup = message;
 
+
         startBookstoreLookup();
+
 
         sendResponse({
             success: true

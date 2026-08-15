@@ -65,7 +65,11 @@ from bookstore.database import (
     get_bookstore_materials,
     get_all_bookstore_selections,
     delete_bookstore_selection,
-    get_bookstore_selections_total
+    get_bookstore_selected_total,
+    get_bookstore_selections_for_application,
+    clear_all_bookstore_selections,
+    get_all_bookstore_selections_for_backup,
+    restore_bookstore_selections
 )
 
 from bookstore.dialog import (
@@ -115,6 +119,8 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.current_application_id = None
+
+        self.last_cleared_materials = []
 
         self.bookstore_application_id = None
         self.bookstore_student_id = None
@@ -637,10 +643,29 @@ class MainWindow(QMainWindow):
         )
 
 
+        self.export_selected_materials_button = (
+            QPushButton(
+                "Export CSV"
+            )
+        )
+
+
         self.remove_selected_material_button = (
             QPushButton(
                 "Remove Selected Material"
             )
+        )
+
+        self.clear_selected_materials_button = QPushButton(
+            "Clear All"
+        )
+
+        self.restore_selected_materials_button = QPushButton(
+            "Restore Last Clear"
+        )
+
+        self.restore_selected_materials_button.setEnabled(
+            False
         )
 
 
@@ -656,7 +681,19 @@ class MainWindow(QMainWindow):
         )
 
         bottom_layout.addWidget(
+            self.export_selected_materials_button
+        )
+
+        bottom_layout.addWidget(
             self.remove_selected_material_button
+        )
+
+        bottom_layout.addWidget(
+            self.clear_selected_materials_button
+        )
+
+        bottom_layout.addWidget(
+            self.restore_selected_materials_button
         )
 
 
@@ -673,10 +710,21 @@ class MainWindow(QMainWindow):
             self.load_selected_materials
         )
 
+        self.export_selected_materials_button.clicked.connect(
+            self.export_selected_materials_csv
+        )
+
         self.remove_selected_material_button.clicked.connect(
             self.remove_selected_material
         )
 
+        self.clear_selected_materials_button.clicked.connect(
+            self.clear_all_selected_materials
+        )
+
+        self.restore_selected_materials_button.clicked.connect(
+            self.restore_last_cleared_materials
+        )
 
         # ---------------------------------------------------------
         # INITIAL LOAD
@@ -1058,22 +1106,34 @@ class MainWindow(QMainWindow):
         indexes = self.table.selectionModel().selectedRows()
 
         if not indexes:
+
+            self.save_current_application()
+
             self.current_application_id = None
+
             return
+
+
+        # Save the application that was previously selected.
+        self.save_current_application()
+
 
         new_application = self.model.get_row(
             indexes[0].row()
         )
 
-        self.save_current_application()
 
-        self.current_application_id = new_application.get(
-            "application_id"
+        self.current_application_id = (
+            new_application.get(
+                "application_id"
+            )
         )
+
 
         self.bookstore_total_label.setText(
             "Not yet looked up"
         )
+
 
         self.display_application(
             new_application
@@ -1103,8 +1163,8 @@ class MainWindow(QMainWindow):
             self.current_application_id
         )
 
-        total_current_price = (
-            get_bookstore_total_current_price(
+        selected_total = (
+            get_bookstore_selected_total(
                 self.current_application_id
             )
         )
@@ -1131,7 +1191,7 @@ class MainWindow(QMainWindow):
         else:
 
             self.bookstore_total_label.setText(
-                f"${total_current_price:,.2f}"
+                f"${selected_total:,.2f}"
             )
 
             self.bookstore_lookup_label.setText(
@@ -1279,20 +1339,156 @@ class MainWindow(QMainWindow):
                     str(value)
                 )
 
-    def save_annotation_changes(self, application_id, application):
+    def export_selected_materials_csv(self):
 
-        old_status = self.model.get_status(application_id)
+        materials = (
+            self.selected_materials_model._materials
+        )
 
-        status = self.edit_widgets["status"].currentText().strip()
-        notes = self.edit_widgets["notes"].toPlainText()
-        rsvp = self.edit_widgets["rsvp"].toPlainText()
-        emailed = self.edit_widgets["emailed"].isChecked()
+        if not materials:
 
-        status_changed = old_status != status
+            QMessageBox.information(
+                self,
+                "Nothing to Export",
+                "There are no selected bookstore "
+                "materials to export."
+            )
+
+            return
+
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Selected Materials",
+            "selected_bookstore_materials.csv",
+            "CSV Files (*.csv)"
+        )
+
+        if not filename:
+            return
+
+
+        columns = (
+            self.selected_materials_model.COLUMNS
+        )
+
+
+        try:
+
+            with open(
+                filename,
+                "w",
+                newline="",
+                encoding="utf-8-sig"
+            ) as file:
+
+                writer = csv.writer(
+                    file
+                )
+
+
+                # Headers
+
+                writer.writerow([
+                    header
+                    for header, field
+                    in columns
+                ])
+
+
+                # Data
+
+                for material in materials:
+
+                    writer.writerow([
+                        material.get(
+                            field,
+                            ""
+                        )
+                        or ""
+                        for header, field
+                        in columns
+                    ])
+
+
+            QMessageBox.information(
+                self,
+                "Export Complete",
+                f"Exported {len(materials)} "
+                "selected material(s)."
+            )
+
+
+        except Exception as e:
+
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                "The selected materials could "
+                "not be exported.\n\n"
+                f"{e}"
+            )
+
+            print(
+                "Error exporting selected materials:",
+                e
+            )
+
+    def save_annotation_changes(
+        self,
+        application_id,
+        application
+    ):
+
+        if application_id is None:
+            return
+
+
+        old_status = self.model.get_status(
+            application_id
+        )
+
+
+        status = (
+            self.edit_widgets["status"]
+            .currentText()
+            .strip()
+        )
+
+        notes = (
+            self.edit_widgets["notes"]
+            .toPlainText()
+        )
+
+        rsvp = (
+            self.edit_widgets["rsvp"]
+            .toPlainText()
+        )
+
+        emailed = (
+            self.edit_widgets["emailed"]
+            .isChecked()
+        )
+
+
+        status_changed = (
+            old_status != status
+        )
+
 
         print(
-            f"STATUS CHECK: {old_status!r} -> {status!r}"
+            "STATUS CHECK:",
+            repr(old_status),
+            "->",
+            repr(status),
+            "FOR:",
+            application_id
         )
+
+
+        # ---------------------------------------------------------
+        # SAVE ANNOTATIONS
+        # ---------------------------------------------------------
 
         set_status(
             application_id,
@@ -1314,18 +1510,10 @@ class MainWindow(QMainWindow):
             emailed
         )
 
-        if (
-            status_changed
-            and self.auto_email_action.isChecked()
-            and status in ["Approved", "WaitList", "Denied"]
-        ):
-            print("SENDING STATUS EMAIL")
 
-            open_status_email(
-                application["email"],
-                application["first_name"],
-                status
-            )
+        # ---------------------------------------------------------
+        # UPDATE MODEL IMMEDIATELY
+        # ---------------------------------------------------------
 
         self.model.update_annotation(
             application_id,
@@ -1335,20 +1523,35 @@ class MainWindow(QMainWindow):
             emailed
         )
 
+
+        # ---------------------------------------------------------
+        # AUTOMATIC STATUS EMAIL
+        # ---------------------------------------------------------
+
+        if (
+            status_changed
+            and self.auto_email_action.isChecked()
+            and status in [
+                "Approved",
+                "WaitList",
+                "Denied"
+            ]
+        ):
+
+            print(
+                "SENDING STATUS EMAIL FOR:",
+                application_id
+            )
+
+            open_status_email(
+                application["email"],
+                application["first_name"],
+                status
+            )
+
     def save_changes(self):
-        indexes = self.table.selectionModel().selectedRows()
 
-        if not indexes:
-            return
-
-        application = self.model.get_row(indexes[0].row())
-
-        self.save_annotation_changes(
-            application["application_id"],
-            application
-        )
-
-        self.model.reload()
+        self.save_current_application()
 
     def delete_selected_application(self):
 
@@ -1396,27 +1599,49 @@ class MainWindow(QMainWindow):
 
         self.model.reload()
 
-
     def save_current_application(self):
 
-        print("Saving", self.current_application_id)
+        application_id = (
+            self.current_application_id
+        )
 
-        if self.current_application_id is None:
+        print(
+            "Saving",
+            application_id
+        )
+
+        if application_id is None:
             return
 
-        indexes = self.table.selectionModel().selectedRows()
 
-        if not indexes:
+        application = None
+
+
+        for row in self.model.get_all_rows():
+
+            if (
+                row.get("application_id")
+                == application_id
+            ):
+
+                application = row
+                break
+
+
+        if application is None:
+
+            print(
+                "Could not find application:",
+                application_id
+            )
+
             return
 
-        application = self.model.get_row(indexes[0].row())
 
         self.save_annotation_changes(
-            self.current_application_id,
+            application_id,
             application
         )
-        
-
 
     def import_csv(self):
         filename, _ = QFileDialog.getOpenFileName(
@@ -1854,6 +2079,21 @@ Updated: {stats["updated"]}
 
 
             # -----------------------------------------
+            # Update details-pane total
+            # -----------------------------------------
+
+            selected_total = (
+                get_bookstore_selected_total(
+                    self.current_application_id
+                )
+            )
+
+            self.bookstore_total_label.setText(
+                f"${selected_total:,.2f}"
+            )
+
+
+            # -----------------------------------------
             # Keep the selection confirmation
             # -----------------------------------------
 
@@ -1884,11 +2124,9 @@ Updated: {stats["updated"]}
         if self.current_application_id is None:
             return
 
-
         materials = get_bookstore_materials(
             self.current_application_id
         )
-
 
         if not materials:
 
@@ -1901,6 +2139,11 @@ Updated: {stats["updated"]}
 
             return
 
+        selected_materials = (
+            get_bookstore_selections_for_application(
+                self.current_application_id
+            )
+        )
 
         student_id = None
 
@@ -1909,7 +2152,6 @@ Updated: {stats["updated"]}
             .selectionModel()
             .selectedRows()
         )
-
 
         if indexes:
 
@@ -1921,14 +2163,53 @@ Updated: {stats["updated"]}
                 "student_id"
             )
 
+        latest_lookup = get_latest_bookstore_lookup(
+            self.current_application_id
+        )
+
+        if latest_lookup is None:
+            QMessageBox.information(
+                self,
+                "No Bookstore Lookup",
+                "There is no saved bookstore lookup "
+                "for this application."
+            )
+            return
+
+        self.bookstore_lookup_id = (
+            latest_lookup["id"]
+        )
 
         dialog = BookstoreViewDialog(
             materials,
+            selected_materials=selected_materials,
             student_id=student_id,
             parent=self
         )
 
-        dialog.exec()
+        if dialog.exec():
+
+            selected = (
+                dialog.selected_materials()
+            )
+
+            self.handle_selected_materials(
+                selected
+            )
+
+            # Refresh the details total.
+            selected_total = (
+                get_bookstore_selected_total(
+                    self.current_application_id
+                )
+            )
+
+            self.bookstore_total_label.setText(
+                f"${selected_total:,.2f}"
+            )
+
+            # Refresh the master selected-materials tab.
+            self.load_selected_materials()
 
     def reset_bookstore_lookup(self):
         self.bookstore_application_id = None
@@ -2164,3 +2445,201 @@ Updated: {stats["updated"]}
                 e
             )
             raise
+
+    def restore_last_cleared_materials(self):
+
+        if not self.last_cleared_materials:
+
+            QMessageBox.information(
+                self,
+                "Nothing to Restore",
+                "There is no previous clear to restore."
+            )
+
+            return
+
+
+        reply = QMessageBox.question(
+            self,
+            "Restore Selected Materials",
+            (
+                f"Restore "
+                f"{len(self.last_cleared_materials)} "
+                "previously selected material(s)?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+
+        if reply != QMessageBox.Yes:
+            return
+
+
+        try:
+
+            
+            # -----------------------------------------
+            # Clear anything currently selected
+            # -----------------------------------------
+
+            clear_all_bookstore_selections()
+
+
+            # -----------------------------------------
+            # Restore backup
+            # -----------------------------------------
+
+            restore_bookstore_selections(
+                self.last_cleared_materials
+            )
+
+
+            # -----------------------------------------
+            # Refresh UI
+            # -----------------------------------------
+
+            self.load_selected_materials()
+
+
+            QMessageBox.information(
+                self,
+                "Selections Restored",
+                (
+                    f"{len(self.last_cleared_materials)} "
+                    "material(s) were restored."
+                )
+            )
+
+
+            # -----------------------------------------
+            # Consume backup
+            # -----------------------------------------
+
+            self.last_cleared_materials = []
+
+            self.restore_selected_materials_button.setEnabled(
+                False
+            )
+
+
+        except Exception as e:
+
+            QMessageBox.critical(
+                self,
+                "Restore Failed",
+                (
+                    "The selected materials could "
+                    "not be restored.\n\n"
+                    f"{e}"
+                )
+            )
+
+            print(
+                "Error restoring selected materials:",
+                e
+            )
+
+    def clear_all_selected_materials(self):
+
+        materials = (
+            get_all_bookstore_selections_for_backup()
+        )
+
+        if not materials:
+
+            QMessageBox.information(
+                self,
+                "Clear Selected Materials",
+                "There are no selected materials to clear."
+            )
+
+            return
+
+
+        reply = QMessageBox.question(
+            self,
+            "Clear All Selected Materials",
+            (
+                f"This will remove {len(materials)} "
+                "selected material(s).\n\n"
+                "A backup will be kept so you can "
+                "restore them during this session.\n\n"
+                "Are you sure you want to continue?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+
+        if reply != QMessageBox.Yes:
+            return
+
+
+        try:
+
+            # -----------------------------------------
+            # Back up exact selections
+            # -----------------------------------------
+
+            # self.last_cleared_materials = [
+            #     dict(selection)
+            #     for selection in materials
+            # ]
+
+            self.last_cleared_materials = (
+                get_all_bookstore_selections_for_backup()
+            )
+
+
+            # -----------------------------------------
+            # Clear database
+            # -----------------------------------------
+
+            clear_all_bookstore_selections()
+
+
+            # -----------------------------------------
+            # Refresh UI
+            # -----------------------------------------
+
+            self.load_selected_materials()
+
+
+            # -----------------------------------------
+            # Enable restore
+            # -----------------------------------------
+
+            self.restore_selected_materials_button.setEnabled(
+                True
+            )
+
+
+            QMessageBox.information(
+                self,
+                "Selected Materials Cleared",
+                (
+                    f"{len(materials)} material(s) "
+                    "were cleared.\n\n"
+                    "Use 'Restore Last Clear' if "
+                    "you want to put them back."
+                )
+            )
+
+
+        except Exception as e:
+
+            QMessageBox.critical(
+                self,
+                "Clear Failed",
+                (
+                    "The selected materials could "
+                    "not be cleared.\n\n"
+                    f"{e}"
+                )
+            )
+
+            print(
+                "Error clearing selected materials:",
+                e
+            )
