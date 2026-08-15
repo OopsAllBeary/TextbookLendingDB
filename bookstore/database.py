@@ -212,6 +212,34 @@ def get_all_bookstore_selections_for_backup():
 
         conn.close()
 
+def delete_bookstore_selection(material_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            DELETE FROM bookstore_selections
+            WHERE material_id = ?
+            """,
+            (
+                material_id,
+            )
+        )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+        raise
+
+    finally:
+
+        conn.close()
+
 def save_bookstore_selection(
     material_id,
     option
@@ -738,7 +766,7 @@ def restore_bookstore_selections(
     finally:
 
         conn.close()
-        
+
 def get_bookstore_selections_total():
 
     conn = get_connection()

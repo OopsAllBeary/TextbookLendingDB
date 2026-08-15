@@ -76,10 +76,6 @@ from bookstore.dialog import (
     BookstoreDialog
 )
 
-from bookstore.view_dialog import (
-    BookstoreViewDialog
-)
-
 
 from gui.bookstore_selections_model import (
     BookstoreSelectionsModel
@@ -88,7 +84,6 @@ from gui.bookstore_selections_model import (
 from bookstore.config import (
     PRIMARY_PROGRAM_ID,
     FALLBACK_PROGRAM_ID,
-    BOOKSTORE_PROGRAMS,
     BOOKSTORE_TERM_ID
 )
 
@@ -2180,7 +2175,7 @@ Updated: {stats["updated"]}
             latest_lookup["id"]
         )
 
-        dialog = BookstoreViewDialog(
+        dialog = BookstoreDialog(
             materials,
             selected_materials=selected_materials,
             student_id=student_id,
@@ -2389,62 +2384,6 @@ Updated: {stats["updated"]}
                 "Clear Database Failed",
                 f"The database could not be cleared.\n\n{e}"
             )
-
-    def save_selected_bookstore_materials(
-        self,
-        selected_materials
-    ):
-
-        try:
-
-            # Remove any previous selections
-            # for this lookup first.
-            clear_bookstore_selections_for_lookup(
-                self.bookstore_lookup_id
-            )
-
-            for item in selected_materials:
-
-                material = item["material"]
-                option = item["option"]
-
-                material_id = material.get(
-                    "id"
-                )
-
-                if not material_id:
-                    print(
-                        "Skipping material without ID:",
-                        material
-                    )
-                    continue
-
-                if option is None:
-                    print(
-                        "Skipping material without selected option:",
-                        material
-                    )
-                    continue
-
-                save_bookstore_selection(
-                    material_id,
-                    option
-                )
-
-            self.load_selected_materials()
-
-            print(
-                "Saved bookstore selections:",
-                len(selected_materials)
-            )
-
-        except Exception as e:
-
-            print(
-                "Error saving bookstore selections:",
-                e
-            )
-            raise
 
     def restore_last_cleared_materials(self):
 

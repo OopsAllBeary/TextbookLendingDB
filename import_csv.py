@@ -105,6 +105,20 @@ def make_application_id(clean_row):
 
     return hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
+def normalize_student_id(student_id):
+    if student_id is None:
+        return ""
+
+    student_id = str(student_id).strip()
+
+    if not student_id:
+        return ""
+
+    if not student_id.startswith("900"):
+        student_id = "900" + student_id
+
+    return student_id
+
 def build_upsert_query():
     insert_columns = ", ".join(DATABASE_COLUMNS)
 
@@ -234,7 +248,7 @@ def import_applications(filename):
 
         values = [
             application_id,
-            clean_row["student_id"],
+            normalize_student_id(clean_row["student_id"]),
             clean_row["first_name"],
             clean_row["last_name"],
             clean_row["email"],
